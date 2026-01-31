@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heartopia Fish Tracker</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary: #5cb85c;
+            --accent: #4a90e2;
+            --text: #2c3e50;
+            --collected-opacity: 0.3;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding-top: 80px; 
+        }
+
+        /* NAVIGATION LAYOUT */
+        nav {
+            position: fixed;
+            top: 0; width: 100%;
+            background: #fff;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            padding: 15px 25px;
+            display: grid;
+            /* Column 1: Progress (adjusted width), Column 2: Filters, Column 3: Toggle */
+            grid-template-columns: 320px 1fr auto; 
+            align-items: center;
+            z-index: 1000;
+            box-sizing: border-box;
+            gap: 20px;
+        }
+
+        /* Left side: Progress Bar + Text Counter */
+        .nav-left-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .progress-rail {
+            flex-grow: 1;
+            height: 16px;
+            background: #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent);
+            transition: width 0.4s ease;
+        }
+
+        #progress-text {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--accent);
+            white-space: nowrap;
+            min-width: 85px;
+        }
+
+        .nav-center {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"], select, button {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }
+
+        button { background-color: var(--primary); color: white; border: none; cursor: pointer; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        #fish-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .fish-card {
+            background: var(--card-bg); border-radius: 12px; padding: 15px;
+            text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: all 0.2s ease; cursor: pointer;
+            min-height: 280px;
+        }
+
+        .fish-card.collected { opacity: var(--collected-opacity); filter: grayscale(100%); }
+        
+        .img-wrapper {
+            width: 100%; height: 120px; display: flex; align-items: center;
+            justify-content: center; background: #f9f9f9; border-radius: 8px;
+            overflow: hidden; margin-bottom: 10px;
+        }
+
+        .fish-card img { width: 100%; height: 100%; object-fit: contain; }
+        .no-image { color: #ccc; font-size: 0.8rem; font-style: italic; }
+        .fish-name { font-weight: bold; margin: 10px 0; }
+        .details { font-size: 0.85rem; line-height: 1.4; color: #666; }
+        .weather-icons { font-size: 1.3rem; margin: 8px 0; letter-spacing: 5px; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="nav-left-progress">
+            <div class="progress-rail">
+                <div id="progress-fill"></div>
+            </div>
+            <span id="progress-text">0 / 0 caught</span>
+        </div>
+
+        <div class="nav-center">
+            <input type="text" id="search-bar" placeholder="Search fish...">
+            
+            <select id="filter-weather">
+                <option value="all">Any Weather</option>
+                <option value="Sunny">Sunny ☀️</option>
+                <option value="Rainy">Rainy 🌧️</option>
+                <option value="Rainbow">Rainbow 🌈</option>
+            </select>
+
+            <select id="filter-time">
+                <option value="all">Any Time</option>
+                <option value="Morning">Morning</option>
+                <option value="Day">Day</option>
+                <option value="Evening">Evening</option>
+                <option value="Night">Night</option>
+            </select>
+
+            <select id="filter-level">
+                <option value="all">Max Level: All</option>
+                <script>
+                    for(let i=1; i<=10; i++) document.write(`<option value="${i}">Level ${i}</option>`);
+                </script>
+            </select>
+
+            <button onclick="resetFilters()">Reset</button>
+        </div>
+
+        <div class="nav-right">
+            <label for="show-needed">Needed Only</label>
+            <input type="checkbox" id="show-needed">
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="fish-grid"></div>
+    </div>
+
+    <script>
+        // 1. COMPREHENSIVE FISH DATA (94 Verified Species)
+        const fishData = [
+            // --- LEVEL 1 (Common) ---
+            { name: "Common Whitefish", location: "Zephyr Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "commonwhitefish.png" },
+            { name: "Common Barbel", location: "Shallow River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "commonbarbel.png" },
+            { name: "Common Bleak", location: "Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "commonbleak.png" },
+            { name: "European Perch", location: "River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "europeanperch.png" },
+            { name: "Common Chub", location: "Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "commonchub.png" },
+            { name: "Spined Loach", location: "Giantwood River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "spinedloach.png" },
+            { name: "Minnow", location: "Tranquil River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "minnow.png" },
+            { name: "Tench", location: "Forest Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "tench.png" },
+            { name: "Crucian Carp", location: "Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "cruciancarp.png" },
+            { name: "Schneider", location: "Suburban Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "schneider.png" },
+            { name: "Sardine", location: "Ocean", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "sardine.png" },
+            { name: "Sea Bass", location: "Ocean", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "seabass.png" },
+            { name: "Oriental Shrimp", location: "River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "orientalshrimp.png" },
+            { name: "Skipjack Tuna", location: "Ocean", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "skipjacktuna.png" },
+            { name: "Beltfish", location: "Zephyr Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "beltfish.png" },
+            { name: "Common Shrimp", location: "East Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "commonshrimp.png" },
+            { name: "Horse Mackerel", location: "Whale Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "horsemackerel.png" },
+            { name: "Sea Stickleback", location: "Old Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "seastickleback.png" },
+            { name: "Striped Red Mullet", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "stripedredmullet.png" },
+            { name: "European Smelt", location: "Meadow Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "europeansmelt.png" },
+            { name: "Seahorse", location: "Whale Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 1, img: "seahorse.png" },
+
+            // --- LEVEL 2 ---
+            { name: "Common Octopus", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "octopus.png" },
+            { name: "Stone Loach", location: "Suburban Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "stoneloach.png" },
+            { name: "False Scad", location: "Zephyr Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "falsescad.png" },
+            { name: "Anglerfish", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "anglerfish.png" },
+            { name: "Atlantic Pygmy Octopus", location: "Whale Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "pygmyoctopus.png" },
+            { name: "Turbot", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "turbot.png" },
+            { name: "Largemouth Bass", location: "Forest Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 2, img: "largemouthbass.png" },
+
+            // --- LEVEL 3 ---
+            { name: "Atlantic Salmon", location: "Zephyr Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "atlanticsalmon.png" },
+            { name: "Clownfish", location: "Old Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "clownfish.png" },
+            { name: "Zander", location: "Giantwood River", weather: ["Sunny", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "zander.png" },
+            { name: "Ruffe", location: "Onsen Mountain Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "ruffe.png" },
+            { name: "Edible Frog", location: "Lakes", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "ediblefrog.png" },
+            { name: "Hermit Crab", location: "East Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "hermitcrab.png" },
+            { name: "Mud Sunfish", location: "Forest Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "mudsunfish.png" },
+            { name: "Tilapia", location: "River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "tilapia.png" },
+            { name: "Streber", location: "Rosy River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 3, img: "streber.png" },
+            { name: "European Crayfish", location: "Forest Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Evening", "Night", "Morning"], level: 3, img: "europeancrayfish.png" },
+
+            // --- LEVEL 4 ---
+            { name: "Common Carp", location: "Rosy River", weather: ["Sunny", "Rainbow"], time: ["Day", "Evening"], level: 4, img: "commoncarp.png" },
+            { name: "Burbot", location: "Tranquil River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Day"], level: 4, img: "burbot.png" },
+            { name: "European Plaice", location: "Old Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Evening", "Night", "Morning"], level: 4, img: "europeanplaice.png" },
+            { name: "Goby", location: "East Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening"], level: 4, img: "goby.png" },
+            { name: "Mussel", location: "Suburban Lake", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 4, img: "mussel.png" },
+            { name: "Rabbit Fish", location: "Ocean", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 4, img: "rabbitfish.png" },
+            { name: "River Crab", location: "Suburban Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 4, img: "rivercrab.png" },
+            { name: "Tadpole", location: "Onsen Mountain Lake", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 4, img: "tadpole.png" },
+
+            // --- LEVEL 5 ---
+            { name: "Trout", location: "Meadow Lake", weather: ["Sunny", "Rainbow"], time: ["Evening", "Night", "Morning"], level: 5, img: "trout.png" },
+            { name: "Butterfly Koi", location: "Meadow Lake", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 5, img: "butterflykoi.png" },
+            { name: "Atlantic Mackerel", location: "Whale Sea", weather: ["Sunny", "Rainbow"], time: ["Day", "Evening"], level: 5, img: "atlanticmackerel.png" },
+            { name: "Common Rudd", location: "Suburban Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 5, img: "commonrudd.png" },
+            { name: "European Flying Squid", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 5, img: "flyingsquid.png" },
+            { name: "European Lobster", location: "Zephyr Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Evening", "Night"], level: 5, img: "europeanlobster.png" },
+            { name: "Freshwater Blenny", location: "Rosy River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 5, img: "freshwaterblenny.png" },
+            { name: "Red-Bellied Piranha", location: "Giantwood River", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 5, img: "piranha.png" },
+
+            // --- LEVEL 6 ---
+            { name: "Chum Salmon", location: "Tranquil River", weather: ["Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 6, img: "chumsalmon.png" },
+            { name: "Grayling", location: "Suburban Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 6, img: "grayling.png" },
+            { name: "Large Pearl Mussel", location: "Forest Lake", weather: ["Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 6, img: "pearlmussel.png" },
+            { name: "Nursehound", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 6, img: "nursehound.png" },
+            { name: "Pufferfish", location: "Old Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 6, img: "pufferfish.png" },
+            { name: "Tub Gurnard", location: "East Sea", weather: ["Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 6, img: "tubgurnard.png" },
+
+            // --- LEVEL 7 ---
+            { name: "Blackspot Seabream", location: "Zephyr Sea", weather: ["Rainy", "Rainbow"], time: ["Evening"], level: 7, img: "blackspotseabream.png" },
+            { name: "European Eel", location: "Old Sea", weather: ["Rainbow"], time: ["Morning", "Day", "Evening"], level: 7, img: "europeaneel.png" },
+            { name: "Mediterranean Killifish", location: "Suburban Lake", weather: ["Sunny", "Rainbow"], time: ["Day", "Evening", "Night"], level: 7, img: "killifish.png" },
+            { name: "Giant Oarfish", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day"], level: 7, img: "giantoarfish.png" },
+            { name: "Mottled Sculpin", location: "Onsen Mountain Lake", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening"], level: 7, img: "mottledsculpin.png" },
+            { name: "Three-Spined Stickleback", location: "Shallow River", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 7, img: "stickleback.png" },
+
+            // --- LEVEL 8 ---
+            { name: "Blue Crayfish", location: "Forest Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Evening", "Night"], level: 8, img: "bluecrayfish.png" },
+            { name: "European Mudminnow", location: "Suburban Lake", weather: ["Sunny", "Rainbow"], time: ["Night", "Morning"], level: 8, img: "mudminnow.png" },
+            { name: "Golden King Crab", location: "Sea Fishing", weather: ["Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 8, img: "goldenkingcrab.png" },
+            { name: "Goldfish", location: "Meadow Lake", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening"], level: 8, img: "goldfish.png" },
+            { name: "Haddock", location: "East Sea", weather: ["Sunny", "Rainbow"], time: ["Day", "Evening", "Night"], level: 8, img: "haddock.png" },
+            { name: "Shadow Bass", location: "Suburban Lake", weather: ["Sunny", "Rainbow"], time: ["Night", "Morning"], level: 8, img: "shadowbass.png" },
+            { name: "King Crab", location: "Whale Sea", weather: ["Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 8, img: "kingcrab.png" },
+            { name: "Nordic Crayfish", location: "Forest Lake", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Night"], level: 8, img: "nordiccrayfish.png" },
+
+            // --- LEVEL 9 ---
+            { name: "Bluefin Tuna", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 9, img: "bluefintuna.png" },
+            { name: "Huchen", location: "Giantwood River", weather: ["Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 9, img: "huchen.png" },
+            { name: "Moonfish", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Evening"], level: 9, img: "moonfish.png" },
+            { name: "Northern Pike", location: "Suburban Lake", weather: ["Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 9, img: "northernpike.png" },
+            { name: "Ocean Sunfish", location: "East Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 9, img: "oceansunfish.png" },
+            { name: "Pumpkinseed", location: "Onsen Mountain Lake", weather: ["Sunny", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 9, img: "pumpkinseed.png" },
+
+            // --- LEVEL 10 ---
+            { name: "Arctic Char", location: "Forest Lake", weather: ["Rainy", "Rainbow"], time: ["Day", "Evening"], level: 10, img: "arcticchar.png" },
+            { name: "Bluegill", location: "Onsen Mountain Lake", weather: ["Sunny", "Rainbow"], time: ["Evening", "Night"], level: 10, img: "bluegill.png" },
+            { name: "Shortfin Mako Shark", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 10, img: "makoshark.png" },
+            { name: "Swordfish", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 10, img: "swordfish.png" },
+            { name: "Wels Catfish", location: "Meadow Lake", weather: ["Sunny", "Rainbow"], time: ["Evening", "Night"], level: 10, img: "welscatfish.png" },
+            { name: "Seabream", location: "Zephyr Sea", weather: ["Rainy", "Rainbow"], time: ["Evening", "Night"], level: 10, img: "seabream.png" },
+            { name: "Giant Squid", location: "Sea Fishing", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Night"], level: 10, img: "giantsquid.png" },
+            { name: "Yellowtail Amberjack", location: "Zephyr Sea", weather: ["Sunny", "Rainy", "Rainbow"], time: ["Morning", "Day", "Evening", "Night"], level: 10, img: "yellowtailamberjack.png" }
+        ];
+
+        const emojiMap = { "Sunny": "☀️", "Rainy": "🌧️", "Rainbow": "🌈" };
+        let collectedFish = JSON.parse(localStorage.getItem('heartopia_caught')) || [];
+
+        function updateProgress() {
+            const total = fishData.length;
+            const caught = collectedFish.length;
+            const percentage = total === 0 ? 0 : Math.round((caught / total) * 100);
+            
+            const fill = document.getElementById('progress-fill');
+            const text = document.getElementById('progress-text');
+            
+            if(fill) fill.style.width = percentage + "%";
+            if(text) text.innerText = `${caught} / ${total} caught`;
+        }
+
+        function handleImgError(imageElement) {
+            imageElement.parentElement.innerHTML = `<div class="no-image">No Image Yet</div>`;
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('fish-grid');
+            if (!grid) return;
+            const searchQuery = document.getElementById('search-bar').value.toLowerCase();
+            const fWeather = document.getElementById('filter-weather').value;
+            const fTime = document.getElementById('filter-time').value;
+            const fLevel = document.getElementById('filter-level').value;
+            const showNeeded = document.getElementById('show-needed').checked;
+
+            grid.innerHTML = '';
+
+            const filtered = fishData.filter(fish => {
+                const isCaught = collectedFish.includes(fish.name);
+                const matchSearch = fish.name.toLowerCase().includes(searchQuery);
+                const matchWeather = fWeather === 'all' || fish.weather.includes(fWeather);
+                const matchTime = fTime === 'all' || fish.time.includes(fTime);
+                const matchLevel = fLevel === 'all' || fish.level <= parseInt(fLevel);
+                const matchNeeded = showNeeded ? !isCaught : true;
+                return matchSearch && matchWeather && matchTime && matchLevel && matchNeeded;
+            });
+
+            filtered.forEach(fish => {
+                const isCollected = collectedFish.includes(fish.name);
+                const weatherIcons = fish.weather.map(w => emojiMap[w] || w).join(' ');
+                const card = document.createElement('div');
+                card.className = `fish-card ${isCollected ? 'collected' : ''}`;
+                card.innerHTML = `
+                    <div class="img-wrapper">
+                        <img src="images/${fish.img}" onerror="handleImgError(this)">
+                    </div>
+                    <div class="fish-name">${fish.name}</div>
+                    <div class="details">
+                        📍 ${fish.location}<br>
+                        <div class="weather-icons">${weatherIcons}</div>
+                        ⏰ ${fish.time.join('/')}
+                    </div>
+                    <div style="font-size:0.7rem; margin-top:8px; color: #999;">Lvl ${fish.level}</div>
+                `;
+                card.onclick = () => toggleFish(fish.name);
+                grid.appendChild(card);
+            });
+            updateProgress();
+        }
+
+        function toggleFish(name) {
+            if (collectedFish.includes(name)) {
+                collectedFish = collectedFish.filter(f => f !== name);
+            } else {
+                collectedFish.push(name);
+            }
+            localStorage.setItem('heartopia_caught', JSON.stringify(collectedFish));
+            renderGrid();
+        }
+
+        function resetFilters() {
+            document.getElementById('search-bar').value = '';
+            document.getElementById('filter-weather').value = 'all';
+            document.getElementById('filter-time').value = 'all';
+            document.getElementById('filter-level').value = 'all';
+            document.getElementById('show-needed').checked = false;
+            renderGrid();
+        }
+
+        document.getElementById('search-bar').addEventListener('input', renderGrid);
+        document.getElementById('show-needed').addEventListener('change', renderGrid);
+        document.querySelectorAll('select').forEach(s => s.addEventListener('change', renderGrid));
+
+        window.onload = renderGrid;
+    </script>
+</body>
+</html>
